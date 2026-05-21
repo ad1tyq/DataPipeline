@@ -16,3 +16,8 @@ You do not need to install Tomcat or complex Java web servers. As long as you ha
 3. Download dependencies and compile the project:
    ```bash
    mvn clean install
+   ```
+4. Run the server:
+   ```bash
+   mvn spring-boot:run
+   ```
