@@ -7,6 +7,10 @@ const IdentityNode = (props) => {
   let cardClass = "node-card";
   if (data.group === 'master') {
     cardClass = "node-card master-node";
+  } else if (data.group === 'property') {
+    cardClass = "node-card property-node";
+  } else {
+    cardClass = "node-card raw-source-node";
   }
 
   return (
@@ -15,10 +19,6 @@ const IdentityNode = (props) => {
       
       <div className="node-title">
         {data.label}
-      </div>
-      
-      <div className="node-group">
-        {data.group.toUpperCase()}
       </div>
       
       <Handle type="source" position={Position.Bottom} />
