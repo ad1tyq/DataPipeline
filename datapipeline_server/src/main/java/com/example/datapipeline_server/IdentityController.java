@@ -64,6 +64,64 @@ public class IdentityController {
                                 .attributes(Map.of("region", rs.getString("region")))
                                 .extractedAt(rs.getTimestamp("updated_at").toInstant())
                                 .build()
+                ),
+
+                // 3. Read from Active Directory
+                new JdbcSourceAdapter("AD_LDAP", dataSource,
+                        "SELECT sam_account_name, display_name, user_principal_name, telephone_number, employee_id, department, title, office_location, when_changed FROM ad_db.ad_users",
+                        (rs, source) -> RawIdentityRow.builder()
+                                .sourceSystem(source)
+                                .externalId(rs.getString("sam_account_name"))
+                                .fullName(rs.getString("display_name"))
+                                .email(rs.getString("user_principal_name"))
+                                .phone(rs.getString("telephone_number"))
+                                // Notice: AD does not track Date of Birth or National ID. 
+                                // Do not attempt to map them, let them default to null.
+                                .attributes(Map.of(
+                                        "department", rs.getString("department") != null ? rs.getString("department") : "",
+                                        "title", rs.getString("title") != null ? rs.getString("title") : "",
+                                        "employee_id", rs.getString("employee_id") != null ? rs.getString("employee_id") : ""
+                                ))
+                                .extractedAt(rs.getTimestamp("when_changed").toInstant())
+                                .build()
+                ),
+
+                // 4. Read from Trading Platform
+                new JdbcSourceAdapter("TRADE", dataSource,
+                        "SELECT trader_cd, trdr_nm, eml, mobile, dob, id_proof_num, desk, book, last_updt_dt FROM trade_db.traders",
+                        (rs, source) -> RawIdentityRow.builder()
+                                .sourceSystem(source)
+                                .externalId(rs.getString("trader_cd"))
+                                .fullName(rs.getString("trdr_nm"))
+                                .email(rs.getString("eml"))
+                                .phone(rs.getString("mobile"))
+                                .dateOfBirth(rs.getObject("dob", LocalDate.class))
+                                .nationalId(rs.getString("id_proof_num"))
+                                .attributes(Map.of(
+                                        "desk", rs.getString("desk") != null ? rs.getString("desk") : "",
+                                        "book", rs.getString("book") != null ? rs.getString("book") : ""
+                                ))
+                                .extractedAt(rs.getTimestamp("last_updt_dt").toInstant())
+                                .build()
+                ),
+
+                // 5. Read from Loan Origination System
+                new JdbcSourceAdapter("LOS", dataSource,
+                        "SELECT officer_code, officer_full_name, official_email_id, mobile_no, date_of_birth, permanent_account_no, region_code, product_specialty, record_updated_on FROM los_db.loan_officer",
+                        (rs, source) -> RawIdentityRow.builder()
+                                .sourceSystem(source)
+                                .externalId(rs.getString("officer_code"))
+                                .fullName(rs.getString("officer_full_name"))
+                                .email(rs.getString("official_email_id"))
+                                .phone(rs.getString("mobile_no"))
+                                .dateOfBirth(rs.getObject("date_of_birth", LocalDate.class))
+                                .nationalId(rs.getString("permanent_account_no"))
+                                .attributes(Map.of(
+                                        "region", rs.getString("region_code") != null ? rs.getString("region_code") : "",
+                                        "specialty", rs.getString("product_specialty") != null ? rs.getString("product_specialty") : ""
+                                ))
+                                .extractedAt(rs.getTimestamp("record_updated_on").toInstant())
+                                .build()
                 )
         );
 
