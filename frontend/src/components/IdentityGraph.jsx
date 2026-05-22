@@ -36,7 +36,6 @@ const getLayoutedElements = (nodes, edges) => {
     let x = nodeWithPosition.x - width / 2;
     let y = nodeWithPosition.y - height / 2;
 
-    // Dynamically shift the primary (first) source node to the left
     if (node.data.isPrimary) {
       x -= 120; 
     }
