@@ -13,7 +13,7 @@ const nodeTypes = {
 const getLayoutedElements = (nodes, edges) => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: 'TB' });
+  dagreGraph.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 80 });
 
   nodes.forEach((node) => {
     let width = 150, height = 150;
@@ -36,7 +36,8 @@ const getLayoutedElements = (nodes, edges) => {
     let x = nodeWithPosition.x - width / 2;
     let y = nodeWithPosition.y - height / 2;
 
-    if (node.data.label === 'CORE_CBS') {
+    // Dynamically shift the primary (first) source node to the left
+    if (node.data.isPrimary) {
       x -= 120; 
     }
 
@@ -61,56 +62,67 @@ const IdentityGraph = () => {
       const transformedNodes = [];
       const transformedEdges = [];
 
-      let masterId = null;
+      const masterNodes = data.nodes.filter(n => n.group === 'master');
 
       data.nodes.forEach((n) => {
         let label = n.label;
         let prefix = 'raw-';
+        
         if (n.group === 'master') {
-          label = 'PRIYA';
+          label = n.label.replace(' (Master)', '').toUpperCase();
           prefix = 'master-';
-          masterId = prefix + n.id;
-        } else if (n.label.includes('CORE_CBS')) {
-          label = 'CORE_CBS';
-        } else if (n.label.includes('EMAIL')) {
-          label = 'EMAIL';
+        } else {
+          const match = n.label.match(/\(([^)]+)\)$/);
+          if (match) {
+            label = match[1];
+          }
         }
 
         transformedNodes.push({
           id: prefix + n.id,
           type: 'custom',
-          data: { label: label, group: n.group, attributes: n.data },
+          data: { label: label, group: n.group, attributes: n.data, isPrimary: false },
           position: { x: 0, y: 0 }
         });
       });
 
-      if (masterId) {
-        const emailNodeId = 'prop-email';
-        transformedNodes.push({
-          id: emailNodeId,
-          type: 'custom',
-          data: { label: 'email', group: 'property' },
-          position: { x: 0, y: 0 }
-        });
+      masterNodes.forEach((master) => {
+        const masterId = 'master-' + master.id;
+        const emailNodeId = 'prop-email-' + master.id;
+        
+        const childEdges = data.edges.filter(e => e.source === master.id && e.label === 'AGGREGATES');
+        
+        if (childEdges.length > 0) {
+          const firstChildId = 'raw-' + childEdges[0].target;
+          const firstChildNode = transformedNodes.find(n => n.id === firstChildId);
+          if (firstChildNode) {
+            firstChildNode.data.isPrimary = true;
+          }
 
-        transformedEdges.push({
-          id: 'edge-master-email',
-          source: masterId,
-          target: emailNodeId,
-          markerEnd: { type: MarkerType.ArrowClosed }
-        });
+          transformedNodes.push({
+            id: emailNodeId,
+            type: 'custom',
+            data: { label: 'email', group: 'property' },
+            position: { x: 0, y: 0 }
+          });
 
-        data.nodes.forEach((n) => {
-          if (n.group === 'raw_source') {
+          transformedEdges.push({
+            id: `edge-${masterId}-email`,
+            source: masterId,
+            target: emailNodeId,
+            markerEnd: { type: MarkerType.ArrowClosed }
+          });
+
+          childEdges.forEach((e) => {
             transformedEdges.push({
-              id: 'edge-raw-email-' + n.id,
-              source: 'raw-' + n.id,
+              id: `edge-raw-email-${e.target}`,
+              source: 'raw-' + e.target,
               target: emailNodeId,
               markerEnd: { type: MarkerType.ArrowClosed }
             });
-          }
-        });
-      }
+          });
+        }
+      });
 
       data.edges.forEach((e, index) => {
         let sourceId = 'raw-' + e.source;
@@ -120,7 +132,7 @@ const IdentityGraph = () => {
         const targetId = 'raw-' + e.target;
 
         transformedEdges.push({
-          id: 'edge-' + index + '-' + sourceId + '-' + targetId,
+          id: `edge-${index}-${sourceId}-${targetId}`,
           source: sourceId,
           target: targetId,
           markerEnd: { type: MarkerType.ArrowClosed }
