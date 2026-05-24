@@ -19,20 +19,25 @@ body {
   justify-content: center;
   align-items: center;
   border-radius: 50%;
-  background-color: #f8fafc;
-  border: 1px solid #334155;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
   color: #1e293b;
+  font-weight: bold;
 }
 
 .master-node {
-  width: 250px;
-  height: 250px;
+  width: 180px;
+  height: 180px;
+  background-color: #fbbf24;
+  border: 4px solid #d97706;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
 .raw-source-node {
   width: 150px;
   height: 150px;
+  background-color: #38bdf8;
+  border: 3px solid #0284c7;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .property-node {

@@ -3,6 +3,7 @@ import { ReactFlow, Controls, Background, useNodesState, useEdgesState, MarkerTy
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import { fetchIdentityGraph } from '../api/fetch';
+import './legend.css';
 import IdentityNode from './IdentityNode';
 import DetailedPanel from './DetailedPanel';
 
@@ -11,40 +12,78 @@ const nodeTypes = {
 };
 
 const getLayoutedElements = (nodes, edges) => {
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 80 });
-
-  nodes.forEach((node) => {
-    let width = 150, height = 150;
-    if (node.data.group === 'master') { width = 250; height = 250; }
-    if (node.data.group === 'property') { width = 90; height = 90; }
-    dagreGraph.setNode(node.id, { width, height });
+  const masterNodes = nodes.filter(n => n.data.group === 'master');
+  
+  const columns = 5;
+  const gridSpacingX = 800;
+  const gridSpacingY = 800;
+  
+  const positionedNodes = [];
+  const masterToRaws = {};
+  
+  masterNodes.forEach(m => masterToRaws[m.id] = []);
+  
+  edges.forEach(e => {
+    if (e.label === 'AGGREGATES') {
+      if (masterToRaws[e.source]) {
+        masterToRaws[e.source].push(e.target);
+      }
+    }
   });
 
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+  const positionedIds = new Set();
+
+  masterNodes.forEach((master, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    
+    // Master Node Dimensions (to center it visually)
+    const masterWidth = 180;
+    const masterHeight = 180;
+    
+    const centerX = col * gridSpacingX;
+    const centerY = row * gridSpacingY;
+    
+    positionedNodes.push({
+      ...master,
+      position: { x: centerX - masterWidth / 2, y: centerY - masterHeight / 2 }
+    });
+    positionedIds.add(master.id);
+
+    const rawIds = masterToRaws[master.id] || [];
+    const numPlanets = rawIds.length;
+    const orbitRadius = 250; 
+    
+    const rawWidth = 150;
+    const rawHeight = 150;
+
+    rawIds.forEach((rawId, i) => {
+      const angle = (i * 2 * Math.PI) / numPlanets;
+      
+      const planetX = centerX + orbitRadius * Math.cos(angle);
+      const planetY = centerY + orbitRadius * Math.sin(angle);
+      
+      const rawNode = nodes.find(n => n.id === rawId);
+      if (rawNode && !positionedIds.has(rawId)) {
+        positionedNodes.push({
+          ...rawNode,
+          position: { x: planetX - rawWidth / 2, y: planetY - rawHeight / 2 }
+        });
+        positionedIds.add(rawId);
+      }
+    });
   });
 
-  dagre.layout(dagreGraph);
-
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    let width = 150, height = 150;
-    if (node.data.group === 'master') { width = 220; height = 220; }
-    if (node.data.group === 'property') { width = 90; height = 90; }
-    let x = nodeWithPosition.x - width / 2;
-    let y = nodeWithPosition.y - height / 2;
-
-    return {
-      ...node,
-      targetPosition: 'top',
-      sourcePosition: 'bottom',
-      position: { x, y },
-    };
+  nodes.forEach(n => {
+    if (!positionedIds.has(n.id)) {
+      positionedNodes.push({
+        ...n,
+        position: { x: Math.random() * 800, y: Math.random() * 800 }
+      });
+    }
   });
 
-  return { nodes: newNodes, edges: edges };
+  return { nodes: positionedNodes, edges: edges };
 };
 
 const IdentityGraph = () => {
@@ -54,84 +93,51 @@ const IdentityGraph = () => {
 
   useEffect(() => {
     fetchIdentityGraph().then((data) => {
-      const transformedNodes = [];
-      const transformedEdges = [];
-
-      const masterNodes = data.nodes.filter(n => n.group === 'master');
-
-      data.nodes.forEach((n) => {
-        let label = n.label;
+      const transformedNodes = data.nodes.map((node) => {
+        let label = node.label;
         let prefix = 'raw-';
 
-        if (n.group === 'master') {
-          label = n.label.replace(' (Master)', '').toUpperCase();
+        if (node.group === 'master') {
+          label = node.label.replace(' (Master)', '').toUpperCase();
           prefix = 'master-';
         } else {
-          const match = n.label.match(/\(([^)]+)\)$/);
+          const match = node.label.match(/\(([^)]+)\)$/);
           if (match) {
             label = match[1];
           }
         }
 
-        transformedNodes.push({
-          id: prefix + n.id,
+        return {
+          id: prefix + node.id,
           type: 'custom',
-          data: { label: label, group: n.group, attributes: n.data },
+          data: { label: label, group: node.group, attributes: node.data },
           position: { x: 0, y: 0 }
-        });
+        };
       });
 
-      const globalEmailNodeId = 'prop-email-global';
-      let hasEmailConnections = false;
-
-      masterNodes.forEach((master) => {
-        const masterId = 'master-' + master.id;
-        
-        const childEdges = data.edges.filter(e => e.source === master.id && e.label === 'AGGREGATES');
-
-        if (childEdges.length > 0) {
-          hasEmailConnections = true;
-
-          transformedEdges.push({
-            id: `edge-${masterId}-global-email`,
-            source: masterId,
-            target: globalEmailNodeId,
-            markerEnd: { type: MarkerType.ArrowClosed }
-          });
-
-          childEdges.forEach((e) => {
-            transformedEdges.push({
-              id: `edge-raw-global-email-${e.target}`,
-              source: 'raw-' + e.target,
-              target: globalEmailNodeId,
-              markerEnd: { type: MarkerType.ArrowClosed }
-            });
-          });
+      const transformedEdges = data.edges.map((edge, index) => {
+        let sourceId = 'raw-' + edge.source;
+        if (edge.label === 'AGGREGATES') {
+          sourceId = 'master-' + edge.source;
         }
-      });
+        const targetId = 'raw-' + edge.target;
 
-      if (hasEmailConnections) {
-        transformedNodes.push({
-          id: globalEmailNodeId,
-          type: 'custom',
-          data: { label: 'email', group: 'property' },
-          position: { x: 0, y: 0 }
-        });
-      }
-
-      data.edges.forEach((e, index) => {
-        let sourceId = 'raw-' + e.source;
-        if (e.label === 'AGGREGATES') {
-          sourceId = 'master-' + e.source;
-        }
-        const targetId = 'raw-' + e.target;
-
-        transformedEdges.push({
-          id: `edge-${index}-${sourceId}-${targetId}`,
+        return {
+          id: `edge-${sourceId}-${targetId}-${index}`,
           source: sourceId,
           target: targetId,
-          markerEnd: { type: MarkerType.ArrowClosed }
-        });
+          label: edge.label,
+          type: edge.label === 'POSSIBLE_DUPLICATE' ? 'straight' : 'default',
+          animated: edge.label === 'POSSIBLE_DUPLICATE',
+          style: { 
+            stroke: edge.label === 'POSSIBLE_DUPLICATE' ? '#ef4444' : '#94a3b8', 
+            strokeWidth: edge.label === 'POSSIBLE_DUPLICATE' ? 2 : 1 
+          },
+          markerEnd: { 
+            type: MarkerType.ArrowClosed, 
+            color: edge.label === 'POSSIBLE_DUPLICATE' ? '#ef4444' : '#94a3b8' 
+          }
+        };
       });
 
       const layouted = getLayoutedElements(transformedNodes, transformedEdges);
@@ -163,6 +169,31 @@ const IdentityGraph = () => {
         <Controls />
         <Background color="#f8fafc" gap={16} />
       </ReactFlow>
+
+      <div className="legend-container">
+        <h3 className="legend-title">Identity Resolution Graph</h3>
+        <p className="legend-subtitle">Hover over nodes to see underlying data.</p>
+        
+        <div className="legend-item">
+          <div className="legend-icon"><div className="legend-circle-golden"></div></div>
+          <span>Golden Record (Master)</span>
+        </div>
+        
+        <div className="legend-item">
+          <div className="legend-icon"><div className="legend-circle-raw"></div></div>
+          <span>Raw Source System</span>
+        </div>
+        
+        <div className="legend-item">
+          <div className="legend-icon"><div className="legend-line-solid"></div></div>
+          <span>Confirmed Match</span>
+        </div>
+        
+        <div className="legend-item">
+          <div className="legend-icon"><div className="legend-line-dashed"></div></div>
+          <span>Possible Duplicate</span>
+        </div>
+      </div>
 
       <DetailedPanel node={selectedNode} onClose={handleClosePanel} />
     </div>
