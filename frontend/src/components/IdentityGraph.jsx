@@ -165,6 +165,7 @@ const IdentityGraph = () => {
         onNodeClick={handleNodeClick}
         nodeTypes={nodeTypes}
         fitView
+        minZoom={0.05}
       >
         <Controls />
         <Background color="#f8fafc" gap={16} />
