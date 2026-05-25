@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 // import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -135,11 +136,28 @@ public class IdentityController {
         for (MasterIdentity master : rawGraph.masters()) {
             reactNodes.add(new NodeDTO(master.id().toString(), master.displayName() + " (Master)", "master", master.survivedAttributes()));
             for (RawIdentityRow subRow : master.subIdentities()) {
-                reactNodes.add(new NodeDTO(subRow.id().toString(), subRow.fullName().orElse("Unknown") + " (" + subRow.sourceSystem() + ")", "raw_source", subRow.attributes()));
+                // Merge identity fields into the attributes map so the
+                // frontend can see *what* drove the match (email, PAN, etc.)
+                Map<String, String> enrichedData = new LinkedHashMap<>(subRow.attributes());
+                subRow.email().ifPresent(v       -> enrichedData.put("email", v));
+                subRow.phone().ifPresent(v       -> enrichedData.put("phone", v));
+                subRow.dateOfBirth().ifPresent(v -> enrichedData.put("dateOfBirth", v.toString()));
+                subRow.nationalId().ifPresent(v  -> enrichedData.put("nationalId", v));
+                enrichedData.put("externalId", subRow.externalId());
+
+                reactNodes.add(new NodeDTO(subRow.id().toString(), subRow.fullName().orElse("Unknown") + " (" + subRow.sourceSystem() + ")", "raw_source", enrichedData));
             }
         }
         for (IdentityEdge edge : rawGraph.edges()) {
-            reactEdges.add(new EdgeDTO(edge.from().toString(), edge.to().toString(), edge.label()));
+            String finalLabel = edge.label();
+
+            if (edge instanceof IdentityEdge.Aggregates agg && !agg.matchedOn().isEmpty()) {
+                finalLabel += " (" + String.join(", ", agg.matchedOn()) + ")";
+            } else if (edge instanceof IdentityEdge.CrossCorrelation cc && !cc.matchedOn().isEmpty()) {
+                finalLabel += " (" + String.join(", ", cc.matchedOn()) + ")";
+            }
+
+            reactEdges.add(new EdgeDTO(edge.from().toString(), edge.to().toString(), finalLabel));
         }
 
         return new GraphResponseDTO(reactNodes, reactEdges);
