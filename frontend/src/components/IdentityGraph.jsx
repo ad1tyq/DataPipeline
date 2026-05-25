@@ -23,7 +23,7 @@ const getLayoutedElements = (nodes, edges) => {
   masterNodes.forEach(m => masterToRaws[m.id] = []);
   
   edges.forEach(e => {
-    if (e.label === 'AGGREGATES') {
+    if (e.label && e.label.startsWith('AGGREGATES')) {
       if (masterToRaws[e.source]) {
         masterToRaws[e.source].push(e.target);
       }
@@ -109,35 +109,46 @@ const IdentityGraph = () => {
       const transformedNodes = data.nodes.map((node) => {
         let label = node.label;
         let prefix = 'raw-';
+        const attributes = { ...node.data };
 
         if (node.group === 'master') {
-          label = node.label.replace(' (Master)', '').toUpperCase();
+          const masterName = node.label.replace(' (Master)', '');
+          label = masterName.toUpperCase();
           prefix = 'master-';
+          attributes.displayName = masterName;
         } else {
-          const match = node.label.match(/\(([^)]+)\)$/);
+          const match = node.label.match(/^(.*?) \(([^)]+)\)$/);
           if (match) {
-            label = match[1];
+            attributes.fullName = match[1].trim();
+            attributes.sourceSystem = match[2];
+            label = match[2];
+          } else {
+            const fallbackMatch = node.label.match(/\(([^)]+)\)$/);
+            if (fallbackMatch) {
+              label = fallbackMatch[1];
+              attributes.sourceSystem = fallbackMatch[1];
+            }
           }
         }
 
         return {
           id: prefix + node.id,
           type: 'custom',
-          data: { label: label, group: node.group, attributes: node.data },
+          data: { label: label, group: node.group, attributes: attributes },
           position: { x: 0, y: 0 }
         };
       });
 
       const transformedEdges = data.edges.map((edge, index) => {
         let sourceId = 'raw-' + edge.source;
-        if (edge.label === 'AGGREGATES') {
+        if (edge.label && edge.label.startsWith('AGGREGATES')) {
           sourceId = 'master-' + edge.source;
         }
         const targetId = 'raw-' + edge.target;
 
-        const isAggregation = edge.label === 'AGGREGATES';
+        const isAggregation = edge.label && edge.label.startsWith('AGGREGATES');
         const isCrossConnection = !isAggregation;
-        const isDuplicate = edge.label === 'POSSIBLE_DUPLICATE';
+        const isDuplicate = edge.label && edge.label.startsWith('POSSIBLE_DUPLICATE');
 
         return {
           id: `edge-${sourceId}-${targetId}-${index}`,

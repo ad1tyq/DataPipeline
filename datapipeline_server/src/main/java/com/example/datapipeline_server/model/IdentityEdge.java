@@ -24,8 +24,16 @@ public sealed interface IdentityEdge
     /**
      * Master -> sub-identity. Each cluster produces N of these (one per
      * sub-identity that aggregated into the master).
+     *
+     * @param matchedOn which deterministic rule kinds caused this row to join
+     *                  the cluster (e.g. {@code [EMAIL, NATIONAL_ID]}).
+     *                  Empty or {@code [SINGLETON]} when the row did not match
+     *                  with any other row.
      */
-    record Aggregates(UUID from, UUID to) implements IdentityEdge {
+    record Aggregates(UUID from, UUID to, Set<String> matchedOn) implements IdentityEdge {
+        public Aggregates {
+            matchedOn = Set.copyOf(matchedOn);
+        }
         @Override public String label() { return "AGGREGATES"; }
     }
 

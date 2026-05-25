@@ -95,10 +95,27 @@ public final class CorrelationPipeline {
                 .sorted(Comparator.comparing(MasterIdentity::displayName))
                 .toList();
 
-        // ─── Stage 5b ── Aggregation edges fall out of the clusters ───────
+        // ─── Stage 5b ── Aggregation edges with match-reason audit trail ──
         List<IdentityEdge> aggregationEdges = masters.stream()
                 .flatMap(m -> m.subIdentities().stream()
-                        .<IdentityEdge>map(s -> new IdentityEdge.Aggregates(m.id(), s.id())))
+                        .<IdentityEdge>map(s -> {
+                            if (m.subIdentities().size() == 1) {
+                                // Singleton — no match occurred; row defaulted to itself
+                                return new IdentityEdge.Aggregates(m.id(), s.id(), Set.of("SINGLETON"));
+                            }
+                            // Reverse-engineer: which deterministic buckets bind this row
+                            // to at least one other row in the same cluster?
+                            Set<String> reasons = blockingIndex.entrySet().stream()
+                                    .filter(e -> e.getKey().deterministic())
+                                    .filter(e -> e.getValue().contains(s))
+                                    .filter(e -> e.getValue().stream()
+                                            .anyMatch(other -> !other.id().equals(s.id())
+                                                    && m.subIdentities().contains(other)))
+                                    .map(e -> e.getKey().kind())
+                                    .collect(Collectors.toSet());
+
+                            return new IdentityEdge.Aggregates(m.id(), s.id(), reasons);
+                        }))
                 .toList();
 
         // ─── Stage 5c ── Cross-cluster correlations from probabilistic blocks
