@@ -13,15 +13,17 @@ const IdentityNode = (props) => {
     cardClass = "node-card raw-source-node";
   }
 
+  const handleStyle = { position: 'absolute', top: '50%', left: '50%', opacity: 0 };
+
   return (
     <div className={cardClass}>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Top} style={handleStyle} />
       
       <div className="node-title">
         {data.label}
       </div>
       
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Bottom} style={handleStyle} />
     </div>
   );
 };
