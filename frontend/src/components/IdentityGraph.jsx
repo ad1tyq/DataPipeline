@@ -14,8 +14,7 @@ const nodeTypes = {
 const getLayoutedElements = (nodes, edges) => {
   const masterNodes = nodes.filter(n => n.data.group === 'master');
   
-  const columns = 5;
-  const gridSpacingX = 800;
+  const gridSpacingX = 1000;
   const gridSpacingY = 800;
   
   const positionedNodes = [];
@@ -34,10 +33,9 @@ const getLayoutedElements = (nodes, edges) => {
   const positionedIds = new Set();
 
   masterNodes.forEach((master, index) => {
-    const col = index % columns;
-    const row = Math.floor(index / columns);
+    const col = index;
+    const row = 0;
     
-    // Master Node Dimensions (to center it visually)
     const masterWidth = 180;
     const masterHeight = 180;
     
@@ -58,10 +56,25 @@ const getLayoutedElements = (nodes, edges) => {
     const rawHeight = 150;
 
     rawIds.forEach((rawId, i) => {
-      const angle = (i * 2 * Math.PI) / numPlanets;
+      const cols = 3;
+      const spacingX = 180;
+      const spacingY = 180;
       
-      const planetX = centerX + orbitRadius * Math.cos(angle);
-      const planetY = centerY + orbitRadius * Math.sin(angle);
+      const isUp = i % 2 === 0;
+      const localIndex = Math.floor(i / 2);
+      
+      const planetCol = localIndex % cols;
+      const planetRow = Math.floor(localIndex / cols);
+      
+      const groupSize = isUp ? Math.ceil(numPlanets / 2) : Math.floor(numPlanets / 2);
+      const nodesInRow = Math.min(cols, groupSize - planetRow * cols);
+      
+      const startX = centerX - ((nodesInRow - 1) * spacingX) / 2;
+      const planetX = startX + planetCol * spacingX;
+      
+      const planetY = isUp 
+          ? centerY - 250 - planetRow * spacingY 
+          : centerY + 250 + planetRow * spacingY;
       
       const rawNode = nodes.find(n => n.id === rawId);
       if (rawNode && !positionedIds.has(rawId)) {
@@ -78,7 +91,7 @@ const getLayoutedElements = (nodes, edges) => {
     if (!positionedIds.has(n.id)) {
       positionedNodes.push({
         ...n,
-        position: { x: Math.random() * 800, y: Math.random() * 800 }
+        position: { x: Math.random() * 2000, y: 500 + Math.random() * 800 }
       });
     }
   });
@@ -122,23 +135,43 @@ const IdentityGraph = () => {
         }
         const targetId = 'raw-' + edge.target;
 
+        const isAggregation = edge.label === 'AGGREGATES';
+        const isCrossConnection = !isAggregation;
+        const isDuplicate = edge.label === 'POSSIBLE_DUPLICATE';
+
         return {
           id: `edge-${sourceId}-${targetId}-${index}`,
           source: sourceId,
           target: targetId,
           label: edge.label,
-          type: edge.label === 'POSSIBLE_DUPLICATE' ? 'straight' : 'default',
-          animated: edge.label === 'POSSIBLE_DUPLICATE',
+          type: isCrossConnection ? 'default' : 'straight', 
+          animated: isDuplicate,
+          zIndex: isCrossConnection ? 10 : 0, 
           style: { 
-            stroke: edge.label === 'POSSIBLE_DUPLICATE' ? '#ef4444' : '#94a3b8', 
-            strokeWidth: edge.label === 'POSSIBLE_DUPLICATE' ? 2 : 1 
+            stroke: isDuplicate ? '#ef4444' : '#94a3b8', 
+            strokeWidth: isDuplicate ? 2 : 1 
           },
           markerEnd: { 
             type: MarkerType.ArrowClosed, 
-            color: edge.label === 'POSSIBLE_DUPLICATE' ? '#ef4444' : '#94a3b8' 
+            color: isDuplicate ? '#ef4444' : '#94a3b8' 
           }
         };
       });
+
+      const masterNodesList = transformedNodes.filter(n => n.data.group === 'master');
+      for (let i = 0; i < masterNodesList.length - 1; i++) {
+        transformedEdges.push({
+          id: `edge-golden-${masterNodesList[i].id}-${masterNodesList[i+1].id}`,
+          source: masterNodesList[i].id,
+          target: masterNodesList[i+1].id,
+          type: 'straight',
+          style: { stroke: '#fbbf24', strokeWidth: 4 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#fbbf24'
+          }
+        });
+      }
 
       const layouted = getLayoutedElements(transformedNodes, transformedEdges);
 
